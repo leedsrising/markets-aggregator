@@ -2,8 +2,11 @@ const express = require('express');
 const app = express();
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const cors = require('cors');
 
 dotenv.config();
+
+app.use(cors());
 
 function generateKalshiJWT() {
     const KALSHI_API_KEY_ID = process.env.KALSHI_API_KEY_ID;
