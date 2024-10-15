@@ -3,6 +3,7 @@ const axios = require('axios');
 const { Levenshtein } = require('levenshtein');
 const _ = require('lodash');
 require('dotenv').config();
+const cors = require('cors');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -98,6 +99,8 @@ app.get('/api/markets', async (req, res) => {
 
   res.json({ markets: matchedMarkets });
 });
+
+app.use(cors());
 
 app.listen(port, () => {
   console.log(`Backend server is running on port ${port}`);
