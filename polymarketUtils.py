@@ -7,6 +7,9 @@ from py_clob_client.order_builder.constants import BUY
 from py_clob_client.clob_types import ApiCreds
 import logging
 
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
 load_dotenv()
 
 def initialize_polymarket_client():
