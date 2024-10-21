@@ -7,11 +7,10 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 import base64
 import kalshi_python
-import kalshi_python
 
 load_dotenv()
 
-def initialize_kalshi_api():
+def initialize_kalshi_client():
     config = kalshi_python.Configuration()
     return kalshi_python.ApiInstance(
         email=os.getenv('KALSHI_EMAIL'),
