@@ -6,9 +6,11 @@ from kalshiUtils import initialize_kalshi_client, fetch_kalshi_markets
 from polymarketUtils import initialize_polymarket_client, fetch_polymarket_markets
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import logging
 
 app = Flask(__name__)
 CORS(app)  # enables CORS for all routes
+logging.basicConfig(level=logging.INFO)
 
 load_dotenv()
 kalshi_client = initialize_kalshi_client()
@@ -25,6 +27,7 @@ def similar_market_names(name1, name2):
 
 def match_markets(kalshi_markets, polymarket_markets):
     matched_markets = []
+    logging.info("matching markets")
     for kalshi_market in kalshi_markets:
         for polymarket_market in polymarket_markets:
             if similar_market_names(kalshi_market['description'], polymarket_market['description']):
