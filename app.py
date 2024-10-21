@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 import requests
@@ -10,6 +11,7 @@ import base64
 import kalshi_python
 
 app = Flask(__name__)
+CORS(app) #enables CORS for all routes
 load_dotenv()
 config = kalshi_python.Configuration()
 kalshi_api = kalshi_python.ApiInstance(
