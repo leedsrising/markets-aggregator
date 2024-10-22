@@ -7,7 +7,7 @@ from py_clob_client.order_builder.constants import BUY
 from py_clob_client.clob_types import ApiCreds
 import logging
 from py_clob_client.clob_types import BookParams
-
+import requests
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -25,34 +25,33 @@ def initialize_polymarket_client():
 
 def fetch_polymarket_markets(client):
     try:
-        markets_data = client.get_markets()
+        url = "https://gamma-api.polymarket.com/markets"
+        response = requests.get(url)
+        response.raise_for_status()
+        markets_data = response.json()
+
         logging.info(f"Fetched {len(markets_data)} markets from Polymarket")
+        
         normalized_markets = []
-        for market in markets_data['data']:
+        for market in markets_data:
             try:
-                # cant use volume because of polymarket rate limiting
-                # book_params = [BookParams(token_id=token['token_id']) for token in market['tokens']]
-                # orderbooks = client.get_order_books(book_params)
-                
-                # volume = sum(sum(order['size'] for order in ob['bids']) + sum(order['size'] for order in ob['asks']) for ob in orderbooks)
-                
-                yes_price = next((token['price'] for token in market['tokens'] if token['outcome'] == 'Yes'), 0)
-                no_price = next((token['price'] for token in market['tokens'] if token['outcome'] == 'No'), 0)
+                outcome_prices = eval(market['outcomePrices'])
+                yes_price = float(outcome_prices[0])
+                no_price = float(outcome_prices[1])
                 
                 normalized_market = {
                     'description': market['question'],
                     'yes_contract': {'price': yes_price},
                     'no_contract': {'price': no_price},
-                    # 'volume': volume,
-                    'volume': 'N/A',
-                    'volume_24h': 'N/A',
-                    'close_time': market['end_date_iso']
+                    'volume': market.get('volume', 'N/A'),
+                    'volume_24h': market.get('volume24hr', 'N/A'),
+                    'close_time': market['endDate']
                 }
                 normalized_markets.append(normalized_market)
             except Exception as e:
                 logging.error(f"Error processing market: {e}")
         return normalized_markets
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         logging.error(f"Error fetching Polymarket markets: {e}")
         return []
 

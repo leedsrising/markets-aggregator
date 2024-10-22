@@ -25,8 +25,8 @@ def fetch_kalshi_markets(kalshi_api, limit=1000):
         for market in markets.markets:
             formatted_market = {
                 "description": market.title,
-                "yes_contract": {"price": market.yes_bid / 100 if market.yes_bid else None},
-                "no_contract": {"price": market.no_bid / 100 if market.no_bid else None},
+                "yes_contract": {"price": market.yes_bid / 100 if market.yes_bid is not None else 0},
+                "no_contract": {"price": market.no_bid / 100 if market.no_bid is not None else 0},
                 "ticker": market.ticker,
                 "volume": market.volume,
                 "volume_24h": market.volume_24h,
@@ -37,4 +37,3 @@ def fetch_kalshi_markets(kalshi_api, limit=1000):
     except Exception as e:
         print('Error fetching Kalshi markets:', str(e))
         return []
-

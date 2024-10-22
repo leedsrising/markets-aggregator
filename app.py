@@ -7,63 +7,72 @@ from polymarketUtils import initialize_polymarket_client, fetch_polymarket_marke
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import logging
+from polymarketUtils import fetch_polymarket_markets
+from models import db, Market
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
 
 app = Flask(__name__)
-CORS(app)  # enables CORS for all routes
-logging.basicConfig(level=logging.INFO)
+CORS(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///markets.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
 
 load_dotenv()
 kalshi_client = initialize_kalshi_client()
 polygon_client = initialize_polymarket_client()
 
-def similar_market_names(name1, name2):
-    # Vectorize the two market names
-    vectorizer = CountVectorizer().fit_transform([name1, name2])
-    vectors = vectorizer.toarray()
-    similarity = cosine_similarity(vectors)[0][1]
-    
-    # You can adjust this threshold as needed
-    return similarity > 0.3  # 30% similarity threshold
-
-def match_markets(kalshi_markets, polymarket_markets):
-    matched_markets = []
-    logging.info("matching markets")
-    for kalshi_market in kalshi_markets:
-        for polymarket_market in polymarket_markets:
-            if similar_market_names(kalshi_market['description'], polymarket_market['description']):
-                matched_market = {
-                    'description': kalshi_market['description'],
-                    'kalshi_yes_price': kalshi_market['yes_contract']['price'],
-                    'kalshi_no_price': kalshi_market['no_contract']['price'],
-                    'polymarket_yes_price': polymarket_market['yes_contract']['price'],
-                    'polymarket_no_price': polymarket_market['no_contract']['price'],
-                    'volume': kalshi_market['volume'],
-                    'volume_24h': kalshi_market['volume_24h'],
-                    'close_time': kalshi_market['close_time']
-                }
-                matched_markets.append(matched_market)
-                break
-    logging.info("finished matching markets")
-    return matched_markets
+with app.app_context():
+    db.create_all()
 
 @app.route('/api/markets')
 def get_markets():
     try:
-        kalshi_markets = fetch_kalshi_markets(kalshi_client)
-        polymarket_markets = fetch_polymarket_markets(polygon_client)
+        current_time = datetime.now(datetime_timezone.utc)
+        kalshi_markets = get_or_fetch_markets('kalshi', current_time)
+        polymarket_markets = get_or_fetch_markets('polymarket', current_time)
 
         all_markets = {
             "kalshi": kalshi_markets,
             "polymarket": polymarket_markets,
         }
         return jsonify(all_markets)
-        
-        # matched_markets = match_markets(kalshi_markets, polymarket_markets)
-        
-        # return jsonify(matched_markets)
     except Exception as e:
         print('Error fetching markets:', str(e))
         return jsonify({"error": "Internal Server Error"}), 500
+
+def get_or_fetch_markets(source, current_time):
+    # Check if we have recent data in the database
+    recent_markets = Market.query.filter(
+        Market.source == source,
+        Market.last_updated > current_time - timedelta(hours=1)
+    ).all()
+
+    if recent_markets:
+        return [market.to_dict() for market in recent_markets]
+
+    # If not, fetch new data
+    if source == 'kalshi':
+        markets = fetch_kalshi_markets(kalshi_client)
+    else:
+        markets = fetch_polymarket_markets(polygon_client)
+
+    # Update database
+    Market.query.filter_by(source=source).delete()
+    for market in markets:
+        db_market = Market(
+            source=source,
+            description=market['description'],
+            yes_price=market['yes_contract']['price'] or 0.0,
+            no_price=market['no_contract']['price'] or 0.0,
+            volume=str(market.get('volume', '0')),
+            volume_24h=str(market.get('volume_24h', '0')),
+            close_time=market['close_time']
+        )
+        db.session.add(db_market)
+    db.session.commit()
+
+    return markets
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 3000))
