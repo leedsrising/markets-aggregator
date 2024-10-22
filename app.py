@@ -23,7 +23,7 @@ def similar_market_names(name1, name2):
     similarity = cosine_similarity(vectors)[0][1]
     
     # You can adjust this threshold as needed
-    return similarity > 0.7  # 70% similarity threshold
+    return similarity > 0.3  # 30% similarity threshold
 
 def match_markets(kalshi_markets, polymarket_markets):
     matched_markets = []
@@ -43,6 +43,7 @@ def match_markets(kalshi_markets, polymarket_markets):
                 }
                 matched_markets.append(matched_market)
                 break
+    logging.info("finished matching markets")
     return matched_markets
 
 @app.route('/api/markets')
@@ -51,15 +52,15 @@ def get_markets():
         kalshi_markets = fetch_kalshi_markets(kalshi_client)
         polymarket_markets = fetch_polymarket_markets(polygon_client)
 
-        # all_markets = {
-        #     "kalshi": kalshi_markets,
-        #     "polymarket": polymarket_markets,
-        # }
-        # return jsonify(all_markets)
+        all_markets = {
+            "kalshi": kalshi_markets,
+            "polymarket": polymarket_markets,
+        }
+        return jsonify(all_markets)
         
-        matched_markets = match_markets(kalshi_markets, polymarket_markets)
+        # matched_markets = match_markets(kalshi_markets, polymarket_markets)
         
-        return jsonify(matched_markets)
+        # return jsonify(matched_markets)
     except Exception as e:
         print('Error fetching markets:', str(e))
         return jsonify({"error": "Internal Server Error"}), 500
