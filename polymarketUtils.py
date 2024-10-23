@@ -10,6 +10,7 @@ from py_clob_client.clob_types import BookParams
 import requests
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import json
 
 logging.basicConfig(level=logging.INFO)
 
@@ -64,16 +65,17 @@ def massage_polymarket_data(markets_data):
 
     for market in markets_data:
         try:
-            outcome_prices = eval(market['outcomePrices']) # eval converts the string list representation of the prices to a list
+            outcome_prices = json.loads(market['outcomePrices'])
             yes_price = float(outcome_prices[0])
             no_price = float(outcome_prices[1])
             
             normalized_market = {
-                'description': market['question'],
+                'title': market['question'],
+                'description': market.get('description', ''),
                 'yes_contract': {'price': yes_price},
                 'no_contract': {'price': no_price},
-                'volume': market.get('volumeNum', 'N/A'),
-                'volume_24h': market.get('volume24hr', 'N/A'),
+                'volume': market.get('volume', 'N/A'),
+                'volume_24h': market.get('volume24Hr', 'N/A'),
                 'close_time': market['endDateIso']
             }
             normalized_data.append(normalized_market)

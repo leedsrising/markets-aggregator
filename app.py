@@ -8,7 +8,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import logging
 from polymarketUtils import fetch_polymarket_markets
-from models import db, Market
+from models import Market
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 import requests
@@ -17,16 +17,10 @@ logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 CORS(app)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///markets.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
 
 load_dotenv()
 kalshi_client = initialize_kalshi_client()
 polygon_client = initialize_polymarket_clob_client()
-
-with app.app_context():
-    db.create_all()
 
 @app.route('/api/markets')
 def get_markets():
@@ -46,14 +40,14 @@ def get_markets():
 
 def get_or_fetch_markets(source, current_time):
     # Check if we have markets as of the last 5 minutes
-    recent_markets = Market.query.filter(
-        Market.source == source,
-        Market.last_updated > current_time - timedelta(minutes=5)
-    ).all()
+    recent_markets = Market.query_recent(
+        source, 
+        current_time - timedelta(minutes=5)
+    )
 
     if recent_markets:
         logging.info(f'Markets not fetched. Already have market data as of 5min ago.')
-        return [market.to_dict() for market in recent_markets]
+        return recent_markets
 
     # If not, fetch new data
     if source == 'kalshi':
@@ -62,19 +56,22 @@ def get_or_fetch_markets(source, current_time):
         markets = fetch_polymarket_markets(polygon_client)
 
     # Update database
-    Market.query.filter_by(source=source).delete()
-    for market in markets:
-        db_market = Market(
-            source=source,
-            description=market['description'],
-            yes_price=market['yes_contract']['price'] or 0.0,
-            no_price=market['no_contract']['price'] or 0.0,
-            volume=str(market.get('volume', '0')),
-            volume_24h=str(market.get('volume_24h', '0')),
-            close_time=market['close_time']
-        )
-        db.session.add(db_market)
-    db.session.commit()
+    Market.delete_by_source(source)
+    
+    # Prepare all market data for batch insert
+    market_data_list = [{
+        'source': source,
+        'title': market['title'],
+        'description': market['description'],
+        'yes_price': market['yes_contract']['price'] or 0.0,
+        'no_price': market['no_contract']['price'] or 0.0,
+        'volume': str(market.get('volume', '0')),
+        'volume_24h': str(market.get('volume_24h', '0')),
+        'close_time': market['close_time']
+    } for market in markets]
+
+    # Batch insert all markets
+    Market.batch_insert(market_data_list)
 
     return markets
 

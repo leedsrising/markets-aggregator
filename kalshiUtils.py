@@ -7,8 +7,10 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 import base64
 import kalshi_python
+import logging
 
 load_dotenv()
+logging.basicConfig(level=logging.INFO)
 
 def initialize_kalshi_client():
     config = kalshi_python.Configuration()
@@ -23,8 +25,10 @@ def fetch_kalshi_markets(kalshi_api, limit=1000):
         markets = kalshi_api.get_markets(limit=limit)
         formatted_markets = []
         for market in markets.markets:
+            logging.info(f"Market: {market}")
             formatted_market = {
-                "description": market.title,
+                "title": market.title,
+                "description": market.subtitle if hasattr(market, 'subtitle') else market.title,
                 "yes_contract": {"price": market.yes_bid / 100 if market.yes_bid is not None else 0},
                 "no_contract": {"price": market.no_bid / 100 if market.no_bid is not None else 0},
                 "ticker": market.ticker,

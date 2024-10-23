@@ -1,25 +1,33 @@
-from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from database import supabase
 
-db = SQLAlchemy()
+class Market:
+    @staticmethod
+    def query_recent(source, current_time):
+        response = supabase.table('markets').select('*')\
+            .eq('source', source)\
+            .gt('last_updated', current_time.isoformat())\
+            .execute()
+        return [Market.from_row(row) for row in response.data]
 
-class Market(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    source = db.Column(db.String(50), nullable=False)
-    description = db.Column(db.String(500), nullable=False)
-    yes_price = db.Column(db.Float, nullable=False)
-    no_price = db.Column(db.Float, nullable=False)
-    volume = db.Column(db.String(50))
-    volume_24h = db.Column(db.String(50))
-    close_time = db.Column(db.String(50))
-    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+    @staticmethod
+    def delete_by_source(source):
+        supabase.table('markets').delete().eq('source', source).execute()
 
-    def to_dict(self):
+    @staticmethod
+    def batch_insert(market_data_list):
+        # Insert all markets in a single request
+        if market_data_list:
+            supabase.table('markets').insert(market_data_list).execute()
+
+    @staticmethod
+    def from_row(row):
         return {
-            'description': self.description,
-            'yes_contract': {'price': self.yes_price},
-            'no_contract': {'price': self.no_price},
-            'volume': self.volume,
-            'volume_24h': self.volume_24h,
-            'close_time': self.close_time
+            'title': row['title'],
+            'description': row['description'],
+            'yes_contract': {'price': row['yes_price']},
+            'no_contract': {'price': row['no_price']},
+            'volume': row['volume'],
+            'volume_24h': row['volume_24h'],
+            'close_time': row['close_time']
         }

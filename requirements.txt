@@ -8,5 +8,4 @@ py-clob-client==0.18.0
 kalshi-python==2.0.0
 scikit-learn==1.5.2
 scipy==1.7.1
-SQLAlchemy==1.4.31
-Flask-SQLAlchemy==2.5.1
+supabase==1.0.3
