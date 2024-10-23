@@ -3,7 +3,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 from kalshiUtils import initialize_kalshi_client, fetch_kalshi_markets
-from polymarketUtils import initialize_polymarket_client, fetch_polymarket_markets
+from polymarketUtils import initialize_polymarket_clob_client, fetch_polymarket_markets
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import logging
@@ -11,6 +11,9 @@ from polymarketUtils import fetch_polymarket_markets
 from models import db, Market
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
+import requests
+
+logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 CORS(app)
@@ -20,7 +23,7 @@ db.init_app(app)
 
 load_dotenv()
 kalshi_client = initialize_kalshi_client()
-polygon_client = initialize_polymarket_client()
+polygon_client = initialize_polymarket_clob_client()
 
 with app.app_context():
     db.create_all()
@@ -42,13 +45,14 @@ def get_markets():
         return jsonify({"error": "Internal Server Error"}), 500
 
 def get_or_fetch_markets(source, current_time):
-    # Check if we have recent data in the database
+    # Check if we have markets as of the last 5 minutes
     recent_markets = Market.query.filter(
         Market.source == source,
-        Market.last_updated > current_time - timedelta(hours=1)
+        Market.last_updated > current_time - timedelta(minutes=5)
     ).all()
 
     if recent_markets:
+        logging.info(f'Markets not fetched. Already have market data as of 5min ago.')
         return [market.to_dict() for market in recent_markets]
 
     # If not, fetch new data
