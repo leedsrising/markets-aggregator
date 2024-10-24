@@ -1,15 +1,65 @@
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from database import supabase
+from config import SOURCES, SOURCE_TABLES
 
 import logging
 
-def deduplicate_markets(markets):
+# database util functions
+
+# create a record in the duplicate market table with the kalshi and polymarket market ids
+def insert_duplicate_market(kalshi_market_id, polymarket_market_id):
+    supabase.table('duplicate_markets').insert({
+        'kalshi_market_id': kalshi_market_id,
+        'polymarket_market_id': polymarket_market_id
+    }).execute()
+
+# query the markets tables (only polymarket_markets for now) to verify that records have
+# recently been updated. If not, we fetch new records.
+def query_recent(source, current_time):
+        response = supabase.table('polymarket_markets').select('*')\
+            .eq('source', source)\
+            .gt('last_updated', current_time.isoformat())\
+            .execute()
+        return [from_row(row) for row in response.data]
+
+# upsert (insert, and replace on conflict) market data to the specified table_name
+def upsert_markets(market_data_list, table_name):
+    if market_data_list:
+        supabase.table(table_name).upsert(market_data_list).execute()
+
+# get all markets from all source market tables
+def get_all_markets():
+    all_markets = []
+    
+    for source in SOURCES:
+        response = supabase.table(SOURCE_TABLES[source]).select('*').execute()
+        markets = [from_row(row) for row in response.data]
+        all_markets.extend(markets)
+    
+    return all_markets
+
+# convert a row from the database into a market object
+# q: is this really necessary as a util function?
+def from_row(row):
+    return {
+        'title': row['title'],
+        'description': row['description'],
+        'yes_contract': {'price': row['yes_price']},
+        'no_contract': {'price': row['no_price']},
+        'volume': row['volume'],
+        'volume_24h': row['volume_24h'],
+        'close_time': row['close_time']
+    }
+
+## Other util functions
+
+def find_duplicate_markets(markets):
     # Load pre-trained model
     model = SentenceTransformer('all-MiniLM-L6-v2')
 
     # Encode market titles
-    titles = [market['title'] for market in markets]
+    titles = [market['title'] for market in markets] ## should maybe encode other info too
     embeddings = model.encode(titles)
 
     # Compute similarity matrix
@@ -45,58 +95,9 @@ def deduplicate_markets(markets):
                     )
 
             used_indices.update(duplicates)
+        else:
+            merged_markets.append(market)
+
+    logging.info(f'Found {len(merged_markets)} duplicate markets out of {len(markets)} total')
 
     return merged_markets
-
-
-def insert_duplicate_market(kalshi_market_id, polymarket_market_id):
-    supabase.table('duplicate_markets').insert({
-        'kalshi_market_id': kalshi_market_id,
-        'polymarket_market_id': polymarket_market_id
-    }).execute()
-
-def insert_data(data, table_name):
-    supabase.table(table_name).insert(data).execute()
-
-def query_recent(source, current_time):
-        response = supabase.table('markets').select('*')\
-            .eq('source', source)\
-            .gt('last_updated', current_time.isoformat())\
-            .execute()
-        return [Market.from_row(row) for row in response.data]
-
-def upsert_markets(market_data_list):
-    if market_data_list:
-        supabase.table('markets').upsert(market_data_list).execute()
-
-def get_existing_markets(source):
-    response = supabase.table('markets').select('title, source').eq('source', source).execute()
-    return {(row['title'], row['source']) for row in response.data}
-
-def delete_by_source(source):
-    supabase.table('markets').delete().eq('source', source).execute()
-
-def batch_insert(market_data_list):
-    # Insert all markets in a single request
-    if market_data_list:
-        supabase.table('markets').insert(market_data_list).execute()
-
-def from_row(row):
-    return {
-        'title': row['title'],
-        'description': row['description'],
-        'yes_contract': {'price': row['yes_price']},
-        'no_contract': {'price': row['no_price']},
-        'volume': row['volume'],
-        'volume_24h': row['volume_24h'],
-        'close_time': row['close_time']
-    }
-
-def insert_duplicate_market(kalshi_market_id, polymarket_market_id):
-    supabase.table('duplicate_markets').insert({
-        'kalshi_market_id': kalshi_market_id,
-        'polymarket_market_id': polymarket_market_id
-    }).execute()
-
-def insert_data(data, table_name):
-    supabase.table(table_name).insert(data).execute()
