@@ -1,21 +1,18 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
-import os
+
 from kalshiUtils import initialize_kalshi_client, fetch_kalshi_markets
 from polymarketUtils import initialize_polymarket_clob_client, fetch_polymarket_markets
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import logging
 from polymarketUtils import fetch_polymarket_markets
-from utils import query_recent, upsert_markets, get_existing_markets, batch_insert, find_duplicate_markets
+from utils import query_recent, upsert_markets, find_duplicate_markets
+
+import os
 from datetime import datetime, timedelta
-from datetime import timezone as datetime_timezone
-import requests
-import time
-from sentence_transformers import SentenceTransformer
-import numpy as np
+from datetime import timezone as datetime_timezoneå
+import logging
 from config import SOURCES, SOURCE_TABLES
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
