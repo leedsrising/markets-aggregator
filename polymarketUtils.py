@@ -38,7 +38,7 @@ def fetch_polymarket_markets(client, limit=100, total_markets=1000, volume_num_m
             if not markets_data:
                 break  # No more markets to fetch
 
-            logging.info(f"Fetched {len(markets_data)} markets from Polymarket (offset: {offset})")
+            # logging.info(f"Fetched {len(markets_data)} markets from Polymarket (offset: {offset})")
             
             normalized_markets = massage_polymarket_data(markets_data)
             all_markets.extend(normalized_markets)
@@ -49,10 +49,9 @@ def fetch_polymarket_markets(client, limit=100, total_markets=1000, volume_num_m
                 break  # Less than 'limit' markets returned, we've reached the end
             
         except requests.exceptions.RequestException as e:
-            logging.error(f"Error fetching Polymarket markets: {e}")
+            logging.error(f"Error fetching Polymarket markets: {e}", exc_info=True)
             break
 
-    logging.info(f"Total markets fetched from Polymarket: {len(all_markets)}")
     return all_markets[:total_markets]  # Return only the top 'total_markets' markets
 
 def massage_polymarket_data(markets_data):
@@ -64,6 +63,7 @@ def massage_polymarket_data(markets_data):
         return []
 
     for market in markets_data:
+        # logging.info(market)
         try:
             outcome_prices = json.loads(market['outcomePrices'])
             yes_price = float(outcome_prices[0])
@@ -76,12 +76,11 @@ def massage_polymarket_data(markets_data):
                 'no_contract': {'price': no_price},
                 'volume': market.get('volume', 'N/A'),
                 'volume_24h': market.get('volume24Hr', 'N/A'),
-                'close_time': market['endDateIso']
+                'close_time': market.get('endDate', '')
             }
             normalized_data.append(normalized_market)
         except Exception as e:
-            logging.error(f"Error processing market: {e}")
-            logging.error(f"Market data: {market}")
+            logging.error(f"Error processing market: {e}", exc_info=True)
+            # logging.error(f"Market data: {market}")
 
-    logging.info(f"normalized_data length: {len(normalized_data)}")
     return normalized_data

@@ -14,6 +14,8 @@ from datetime import timezone as datetime_timezone
 import requests
 
 logging.basicConfig(level=logging.INFO)
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 app = Flask(__name__)
 CORS(app)
@@ -35,14 +37,14 @@ def get_markets():
         }
         return jsonify(all_markets)
     except Exception as e:
-        print('Error fetching markets:', str(e))
+        logging.error(f'Error fetching markets: {e}', exc_info=True)
         return jsonify({"error": "Internal Server Error"}), 500
 
 def get_or_fetch_markets(source, current_time):
     # Check if we have markets as of the last 5 minutes
     recent_markets = Market.query_recent(
         source, 
-        current_time - timedelta(minutes=5)
+        current_time - timedelta(seconds=5)
     )
 
     if recent_markets:
@@ -63,11 +65,12 @@ def get_or_fetch_markets(source, current_time):
         'source': source,
         'title': market['title'],
         'description': market['description'],
-        'yes_price': market['yes_contract']['price'] or 0.0,
-        'no_price': market['no_contract']['price'] or 0.0,
+        'yes_price': market['yes_contract']['price'] if isinstance(market['yes_contract'], dict) else market['yes_contract'],
+        'no_price': market['no_contract']['price'] if isinstance(market['no_contract'], dict) else market['no_contract'],
         'volume': str(market.get('volume', '0')),
         'volume_24h': str(market.get('volume_24h', '0')),
-        'close_time': market['close_time']
+        'close_time': market['close_time'],
+        'last_updated': current_time.isoformat()
     } for market in markets]
 
     # Batch insert all markets
