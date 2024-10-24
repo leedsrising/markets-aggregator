@@ -11,6 +11,16 @@ class Market:
         return [Market.from_row(row) for row in response.data]
 
     @staticmethod
+    def upsert_markets(market_data_list):
+        if market_data_list:
+            supabase.table('markets').upsert(market_data_list).execute()
+
+    @staticmethod
+    def get_existing_markets(source):
+        response = supabase.table('markets').select('title, source').eq('source', source).execute()
+        return {(row['title'], row['source']) for row in response.data}
+
+    @staticmethod
     def delete_by_source(source):
         supabase.table('markets').delete().eq('source', source).execute()
 

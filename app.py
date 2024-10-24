@@ -12,6 +12,7 @@ from models import Market
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 import requests
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +51,8 @@ def get_markets():
         return jsonify({"error": "Internal Server Error"}), 500
 
 def get_or_fetch_markets(source, current_time):
+    start_time = time.time()
+    
     # Check if we have markets as of the last 5 minutes
     recent_markets = Market.query_recent(
         source, 
@@ -66,8 +69,7 @@ def get_or_fetch_markets(source, current_time):
     else:
         markets = fetch_polymarket_markets(polygon_client)
 
-    # Update database
-    Market.delete_by_source(source)
+    existing_markets = Market.get_existing_markets(source)
     
     # Prepare all market data for batch insert
     market_data_list = [{
@@ -82,9 +84,10 @@ def get_or_fetch_markets(source, current_time):
         'last_updated': current_time.isoformat()
     } for market in markets]
 
-    # Batch insert all markets
-    Market.batch_insert(market_data_list)
+    Market.upsert_markets(market_data_list)
 
+    end_time = time.time()
+    logging.info(f"Time taken to fetch and process {source} markets: {end_time - start_time:.2f} seconds")
     return markets
 
 if __name__ == '__main__':
