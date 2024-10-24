@@ -13,7 +13,16 @@ from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 import requests
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# Suppress httpx logs
+logging.getLogger('httpx').setLevel(logging.WARNING)
+
+# Suppress werkzeug logs
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 

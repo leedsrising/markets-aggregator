@@ -27,6 +27,8 @@ def fetch_kalshi_markets(kalshi_api, limit=1000, status='open'):
         regular_markets = fetch_non_election_kalshi_markets(kalshi_api, limit=limit, status=status)
         election_markets = fetch_kalshi_election_markets(kalshi_api)
         
+        logging.info(f"Fetched {len(regular_markets)} regular markets and {len(election_markets)} election markets from Kalshi")
+
         # Combine both types of markets
         return regular_markets + election_markets
     except Exception as e:
@@ -72,9 +74,10 @@ def fetch_non_election_kalshi_markets(kalshi_api, limit=1000, status='open', num
             if not cursor:
                 break
                 
-            logging.info(f"Fetched {len(all_markets)} markets so far")
+            if len(all_markets) % 500 == 0:  # Only log every 500 markets
+                logging.info(f"Progress: Fetched {len(all_markets)} markets")
             
-        logging.info(f"Total markets fetched: {len(all_markets)}")
+        logging.info(f"Completed: Total {len(all_markets)} markets fetched from Kalshi")
         return all_markets[:num_markets]
         
     except Exception as e:
