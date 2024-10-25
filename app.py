@@ -52,8 +52,10 @@ def get_markets():
                 upsert_markets(markets, SOURCE_TABLES[source])
                 
             all_markets.extend(markets)
+        
+        logging.info(f'sending {len(all_markets)} markets to frontend')
 
-        return jsonify(markets)
+        return jsonify(all_markets)
     except Exception as e:
         logging.error(f'Error fetching markets: {e}', exc_info=True)
         return jsonify({"error": "Internal Server Error"}), 500
