@@ -75,9 +75,12 @@ def find_duplicate_markets(markets):
     # Load pre-trained model
     model = SentenceTransformer('all-MiniLM-L6-v2')
 
-    # Encode market titles
-    titles = [market['title'] for market in markets] ## should maybe encode other info too
-    embeddings = model.encode(titles)
+    # Encode market titles and descriptions
+    titles_and_descriptions = [
+        f"{market['title']} {market['description']}"
+        for market in markets
+    ]
+    embeddings = model.encode(titles_and_descriptions)
 
     # Compute similarity matrix
     similarity_matrix = cosine_similarity(embeddings)

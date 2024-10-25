@@ -26,7 +26,7 @@ def fetch_polymarket_markets(client, limit=100, total_markets=1000, volume_num_m
     
     while len(all_markets) < total_markets:
         try:
-            url = f"https://gamma-api.polymarket.com/markets?limit={limit}&offset={offset}&volume_num_min={volume_num_min}"
+            url = f"https://gamma-api.polymarket.com/markets?limit={limit}&offset={offset}&volume_num_min={volume_num_min}&closed=false"
             response = requests.get(url)
             response.raise_for_status()
             markets_data = response.json()
@@ -47,6 +47,8 @@ def fetch_polymarket_markets(client, limit=100, total_markets=1000, volume_num_m
         except requests.exceptions.RequestException as e:
             logging.error(f"Error fetching Polymarket markets: {e}", exc_info=True)
             break
+    
+    logging.info(f"Fetched {len(all_markets)} markets from Polymarket")
 
     return all_markets[:total_markets]  # Return only the top 'total_markets' markets
 
@@ -65,15 +67,15 @@ def massage_polymarket_data(markets_data):
             no_price = float(outcome_prices[1])
             
             normalized_market = {
-                'id': market['id'],
+                # 'id': market['id'],
                 'source': 'polymarket',
                 'title': market['question'],
-                'description': market.get('description', ''),
+                'description': market['description'],
                 'yes_price': yes_price,
                 'no_price': no_price,
-                'volume': market.get('volume', 'N/A'),
-                'volume_24h': market.get('volume24Hr', 'N/A'),
-                'close_time': market['endDate']
+                'volume': market['volume'],
+                'volume_24h': market.get('volume24hr', 0),
+                'close_time': market['events'][0]['endDate'] ## TODO: consider case with multiple events
             }
             normalized_data.append(normalized_market)
         except Exception as e:
