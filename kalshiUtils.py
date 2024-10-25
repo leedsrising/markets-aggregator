@@ -1,14 +1,18 @@
 import os
-from dotenv import load_dotenv
 import requests
 import time
+import base64
+import json
+
+import pprint
+from dotenv import load_dotenv
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
-import base64
+
 import kalshi_python
 import logging
-import json
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -53,32 +57,36 @@ def fetch_non_election_kalshi_markets(kalshi_api, limit=1000, status='open', num
                 
             # Format the current batch
             for market in markets_response.markets:
-                # logging.info("non election kalshi market: " + str(market))
-                formatted_market = {
-                    "title": market.title,
-                    "description": '',
-                    # "description": (market['underlying'] if market['underlying'] else '') + (market['description_context'] if market['description_context'] else ''),
-                    "yes_contract": {"price": market.yes_ask / 100 if hasattr(market, 'yes_ask') else 0},
-                    "no_contract": {"price": market.no_ask / 100 if hasattr(market, 'no_ask') else 0},
-                    "ticker": market.ticker,
-                    "volume": market.volume,
-                    "volume_24h": market.volume_24h,
-                    "close_time": market.close_time
-                }
-                all_markets.append(formatted_market)
-            
-            # Update cursor for next iteration
+                
+                try:
+                    formatted_market = {
+                        "kalshi_id": 'N/A', # non-election markets dont have an ID field
+                        "source": "kalshi",
+                        "title": market.title,
+                        "description": '',
+                        # "description": (market['underlying'] if market['underlying'] else '') + (market['description_context'] if market['description_context'] else ''),
+                        "yes_price": market.yes_ask / 100 if hasattr(market, 'yes_ask') else 0,
+                        "no_price": market.no_ask / 100 if hasattr(market, 'no_ask') else 0,
+                        "ticker": market.ticker,
+                        "volume": market.volume,
+                        "volume_24h": market.volume_24h,
+                        "close_time": market.close_time
+                    }
+                    all_markets.append(formatted_market)
+                except Exception as e:
+                    logging.error(f'Error formatting Kalshi non-election market: {e}', exc_info=True)
+                    logging.error(f"Pretty printed non-election market: {pprint.pformat(market)}")
+                    raise  # Re-raise the exception to propagate it up
+
             cursor = markets_response.cursor
             
             # If no cursor returned, we've reached the end
             if not cursor:
                 break
                 
-            if len(all_markets) % 500 == 0:  # Only log every 500 markets
-                logging.info(f"Progress: Fetched {len(all_markets)} markets")
+            logging.info(f"Progress: Fetched {len(all_markets)} markets")
             
-        logging.info(f"Completed: Total {len(all_markets)} markets fetched from Kalshi")
-        return all_markets[:num_markets]
+        return all_markets
         
     except Exception as e:
         logging.error(f'Error fetching regular Kalshi markets: {e}', exc_info=True)
@@ -103,20 +111,29 @@ def fetch_kalshi_election_markets(kalshi_api):
         #         logging.info(json.dumps(election_data['events'][0]['markets'][0], indent=2))
         
         formatted_markets = []
+        # an event can have multiple markets within it. ie event: price of ethereum, markets: price above 1k, 2k, 3k
         for event in election_data['events']:
-            # Each event might have multiple markets
+            logging.debug(f"Formatted Kalshi election market: {pprint.pformat(event)}")
             for market in event['markets']:
-                formatted_market = {
-                    "title": market['title'],
-                    "description": market.get('underlying', '') + market.get('description_context', ''),
-                    "yes_contract": market.get('yes_ask', 'N/A'),
-                    "no_contract": 1 - market.get('yes_ask', 'N/A'), #kalshi election markets dont have a no_ask value
-                    "ticker": market.get('ticker_name', 'N/A'),
-                    "volume": market.get('volume', 'N/A'),
-                    "volume_24h": market.get('volume_24h', 'N/A'),
-                    "close_time": market['close_date']
-                }
-                formatted_markets.append(formatted_market)
+                try:
+                    formatted_market = {
+                        "kalshi_id": market['id'],
+                        "source": "kalshi",
+                        "title": market['title'],
+                        "description": event['underlying'] + event['description_context'],
+                        "yes_price": market['yes_ask'],
+                        "no_price": 1 - market['yes_ask'], # kalshi election markets dont have a no_ask value
+                        "ticker": market['ticker_name'],
+                        "volume": market['volume'],
+                        "volume_24h": market.get('volume_24h', 'N/A'),
+                        "close_time": market['close_date']
+                    }
+                    formatted_markets.append(formatted_market)
+                except Exception as e:
+                    logging.error(f'Error formatting Kalshi election market: {e}', exc_info=True)
+                    logging.debug(f"Formatted Kalshi election market: {pprint.pformat(market)}")
+                    raise e
+
         return formatted_markets
     except Exception as e:
         logging.error(f'Error fetching Kalshi election markets: {e}', exc_info=True)

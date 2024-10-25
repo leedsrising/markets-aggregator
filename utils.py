@@ -1,11 +1,27 @@
+import os
+
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-from database import supabase
+from database import supabase, create_client
 from config import SOURCES, SOURCE_TABLES
 
 import logging
 
 # database util functions
+
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+supabase = create_client(supabase_url, supabase_key)
+
+# get the schema of a table in supabase
+def get_table_schema(table_name):
+    query = f"""
+    SELECT column_name, data_type, is_nullable
+    FROM information_schema.columns
+    WHERE table_name = '{table_name}';
+    """
+    response = supabase.rpc('execute_sql', {'sql': query}).execute()
+    return response.data
 
 # create a record in the duplicate market table with the kalshi and polymarket market ids
 def insert_duplicate_market(kalshi_market_id, polymarket_market_id):
@@ -16,17 +32,18 @@ def insert_duplicate_market(kalshi_market_id, polymarket_market_id):
 
 # query the markets tables (only polymarket_markets for now) to verify that records have
 # recently been updated. If not, we fetch new records.
-def query_recent(source, current_time):
-        response = supabase.table('polymarket_markets').select('*')\
-            .eq('source', source)\
-            .gt('last_updated', current_time.isoformat())\
-            .execute()
-        return [from_row(row) for row in response.data]
+def query_recent(current_time):
+    response = supabase.table('polymarket_markets').select('*')\
+        .gt('last_updated', current_time.isoformat())\
+        .execute()
+    return [from_row(row) for row in response.data]
 
 # upsert (insert, and replace on conflict) market data to the specified table_name
 def upsert_markets(market_data_list, table_name):
-    if market_data_list:
+    try:
         supabase.table(table_name).upsert(market_data_list).execute()
+    except Exception as e:
+        logging.error(f'Error upserting markets to {table_name}: {e}', exc_info=True)
 
 # get all markets from all source market tables
 def get_all_markets():
@@ -90,7 +107,7 @@ def find_duplicate_markets(markets):
                 if kalshi_market and polymarket_market:
                     # Insert into duplicate_markets table
                     insert_duplicate_market(
-                        kalshi_market['id'],
+                        kalshi_market['kalshi_id'],
                         polymarket_market['id']
                     )
 

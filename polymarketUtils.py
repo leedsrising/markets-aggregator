@@ -70,10 +70,12 @@ def massage_polymarket_data(markets_data):
             no_price = float(outcome_prices[1])
             
             normalized_market = {
+                'id': market.get('id', ''),
+                'source': 'polymarket',
                 'title': market['question'],
                 'description': market.get('description', ''),
-                'yes_contract': {'price': yes_price},
-                'no_contract': {'price': no_price},
+                'yes_price': yes_price,
+                'no_price': no_price,
                 'volume': market.get('volume', 'N/A'),
                 'volume_24h': market.get('volume24Hr', 'N/A'),
                 'close_time': market.get('endDate', '')

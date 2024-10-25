@@ -1,3 +1,8 @@
+import os
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
+import logging
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -7,10 +12,6 @@ from polymarketUtils import initialize_polymarket_clob_client, fetch_polymarket_
 from polymarketUtils import fetch_polymarket_markets
 from utils import query_recent, upsert_markets, find_duplicate_markets
 
-import os
-from datetime import datetime, timedelta
-from datetime import timezone as datetime_timezoneå
-import logging
 from config import SOURCES, SOURCE_TABLES
 
 logging.basicConfig(
@@ -21,10 +22,8 @@ logging.basicConfig(
 
 # Suppress httpx logs
 logging.getLogger('httpx').setLevel(logging.WARNING)
-
 # Suppress werkzeug logs
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__)
 CORS(app)
@@ -40,7 +39,7 @@ def get_markets():
         all_markets = []
 
         for source in SOURCES:
-            recent_markets = query_recent(source, current_time - timedelta(seconds=5))
+            recent_markets = query_recent(current_time - timedelta(seconds=5))
             #if there are recently pulled markets for [source], just return them
             if recent_markets:
                 logging.info(f'Markets not fetched for {source}. Already have source data updated <5min ago.')
