@@ -130,12 +130,23 @@ def scheduled_deduplication():
     with app.app_context():
         deduplicate_markets()
 
+def fetch_all_markets():
+    with app.app_context():
+        get_markets()
+
 scheduler = BackgroundScheduler()
 scheduler.add_job(
     scheduled_deduplication,
-    trigger=CronTrigger(minute='*/5'),  # Run every 5 minutes
+    trigger=CronTrigger(hour='*/5'),  # Run every 5 hours
     id='deduplication_task',
-    name='Deduplicate markets every 5 minutes',
+    name='Deduplicate markets every 5 hours',
+    replace_existing=True)
+
+scheduler.add_job(
+    fetch_all_markets,
+    trigger=CronTrigger(hour='*'),  # Run every hour
+    id='fetch_markets_task',
+    name='Fetch markets every hour',
     replace_existing=True)
 scheduler.start()
 
