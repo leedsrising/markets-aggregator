@@ -2,6 +2,9 @@ import os
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 import logging
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+import atexit
 
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -79,6 +82,66 @@ def deduplicate_markets():
         logging.error(f'Error during deduplication: {e}', exc_info=True)
         return jsonify({"error": "Internal Server Error"}), 500
 
+@app.route('/api/get_deduplicated_markets')
+def get_deduplicated_markets():
+    try:
+        # Fetch deduplicated markets
+        response = supabase.table('duplicate_markets').select('*').execute()
+        deduplicated_markets = response.data
+
+        # Fetch full market data for each deduplicated pair
+        full_markets = []
+        for pair in deduplicated_markets:
+            kalshi_response = supabase.table('kalshi_markets').select('*').eq('ticker', pair['kalshi_market_id']).execute()
+            polymarket_response = supabase.table('polymarket_markets').select('*').eq('id', pair['polymarket_market_id']).execute()
+
+            try:
+                kalshi_market = kalshi_response.data[0]
+                polymarket_market = polymarket_response.data[0]
+            
+            except Exception as e:
+                logging.info(f"Error fetching market data: {e}")
+                logging.info(f"Kalshi response: {kalshi_response}")
+                logging.info(f"Polymarket response: {polymarket_response}")
+
+            combined_market = {
+                'title': kalshi_market['title'],
+                'description': kalshi_market['description'],
+                'kalshi_yes_price': kalshi_market['yes_price'],
+                'kalshi_no_price': kalshi_market['no_price'],
+                'polymarket_yes_price': polymarket_market['yes_price'],
+                'polymarket_no_price': polymarket_market['no_price'],
+                'kalshi_volume': kalshi_market['volume'],
+                'polymarket_volume': polymarket_market['volume'],
+                'kalshi_volume_24h': kalshi_market['volume_24h'],
+                'polymarket_volume_24h': polymarket_market['volume_24h'],
+                'close_time': kalshi_market['close_time'],
+                'kalshi_ticker': kalshi_market['ticker'],
+                'polymarket_id': polymarket_market['id']
+            }
+            full_markets.append(combined_market)
+
+        return jsonify(full_markets)
+    except Exception as e:
+        logging.error(f'Error fetching deduplicated markets: {e}', exc_info=True)
+        return jsonify({"error": "Internal Server Error"}), 500
+
+def scheduled_deduplication():
+    with app.app_context():
+        deduplicate_markets()
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(
+    scheduled_deduplication,
+    trigger=CronTrigger(minute='*/5'),  # Run every 5 minutes
+    id='deduplication_task',
+    name='Deduplicate markets every 5 minutes',
+    replace_existing=True)
+scheduler.start()
+
+# Shut down the scheduler when exiting the app
+atexit.register(lambda: scheduler.shutdown())
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 3000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, use_reloader=False)
