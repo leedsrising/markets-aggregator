@@ -26,8 +26,8 @@ def get_table_schema(table_name):
 # create a record in the duplicate market table with the kalshi and polymarket market ids
 def insert_duplicate_market(kalshi_market_id, polymarket_market_id):
     supabase.table('duplicate_markets').insert({
-        'kalshi_market_id': kalshi_market_id,
-        'polymarket_market_id': polymarket_market_id
+        'kalshi_market_id': str(kalshi_market_id),
+        'polymarket_market_id': str(polymarket_market_id)
     }).execute()
 
 # query the markets tables (only polymarket_markets for now) to verify that records have
@@ -81,43 +81,78 @@ def find_duplicate_markets(markets):
         for market in markets
     ]
     embeddings = model.encode(titles_and_descriptions)
+    logging.info(f'Computed {len(embeddings)} embeddings')
 
     # Compute similarity matrix
     similarity_matrix = cosine_similarity(embeddings)
 
     # Find duplicate pairs
-    duplicate_pairs = []
+    duplicate_pairs = set()
     for market_index in range(len(markets)):
         for comparison_index in range(market_index + 1, len(markets)):
-            if similarity_matrix[market_index][comparison_index] > 0.5:
-                duplicate_pairs.append((market_index, comparison_index))
+            if similarity_matrix[market_index][comparison_index] > 0.8:
+                duplicate_pairs.add(tuple(sorted((market_index, comparison_index))))
+
+    logging.info(f'Found {len(duplicate_pairs)} duplicate pairs')
 
     # Merge and deduplicate markets
     merged_markets = []
     used_indices = set()
 
-    for market_index, market in enumerate(markets):
-        if market_index not in used_indices:
-            # Check for duplicates
-            duplicates = [comparison_index for comparison_index in range(len(markets)) 
-                          if (market_index, comparison_index) in duplicate_pairs or 
-                          (comparison_index, market_index) in duplicate_pairs]
-            
-            for comparison_index in duplicates:
-                kalshi_market = markets[market_index] if markets[market_index]['source'] == 'kalshi' else markets[comparison_index]
-                polymarket_market = markets[comparison_index] if markets[comparison_index]['source'] == 'polymarket' else markets[market_index]
+    for pair in duplicate_pairs:
+        market_index, comparison_index = pair
+        if market_index not in used_indices and comparison_index not in used_indices:
+            market1 = markets[market_index]
+            market2 = markets[comparison_index]
 
-                if kalshi_market and polymarket_market:
-                    # Insert into duplicate_markets table
-                    insert_duplicate_market(
-                        kalshi_market['kalshi_id'],
-                        polymarket_market['id']
-                    )
+            if market1['source'] == 'kalshi' and market2['source'] == 'polymarket':
+                kalshi_market, polymarket_market = market1, market2
+            elif market1['source'] == 'polymarket' and market2['source'] == 'kalshi':
+                kalshi_market, polymarket_market = market2, market1
+            else:
+                continue
 
-            used_indices.update(duplicates)
-        else:
+            try:
+                logging.info(f'Found duplicate markets: Kalshi: {get_kalshi_name_by_ticker(kalshi_market["ticker"])} || Polymarket: {get_polymarket_name_by_id(polymarket_market["id"])}')
+            except KeyError as e:
+                logging.error(f"KeyError when logging duplicate markets: {e}")
+                logging.error(f"Kalshi market data: {kalshi_market}")
+                logging.error(f"Polymarket market data: {polymarket_market}")
+
+            # Insert into duplicate_markets table
+            insert_duplicate_market(
+                kalshi_market['ticker'],
+                polymarket_market['id']
+            )
+            used_indices.update(pair)
+
+    for index, market in enumerate(markets):
+        if index not in used_indices:
             merged_markets.append(market)
 
-    logging.info(f'Found {len(merged_markets)} duplicate markets out of {len(markets)} total')
+    logging.info(f'Found {len(duplicate_pairs)} duplicate markets out of {len(markets)} total')
 
     return merged_markets
+
+# given a polymarket market id, return that market's title on polymarket
+def get_polymarket_name_by_id(polymarket_market_id):
+    try:
+        response = supabase.table('polymarket_markets').select('title').eq('id', polymarket_market_id).execute()
+        if response.data:
+            return response.data[0]['title']
+        else:
+            return None
+    except Exception as e:
+        logging.error(f'Error fetching Polymarket market name: {e}', exc_info=True)
+        return None
+
+def get_kalshi_name_by_ticker(kalshi_market_ticker):
+    try:
+        response = supabase.table('kalshi_markets').select('title').eq('ticker', kalshi_market_ticker).execute()
+        if response.data:
+            return response.data[0]['title']
+        else:
+            return None
+    except Exception as e:
+        logging.error(f'Error fetching Kalshi market name: {e}', exc_info=True)
+        return None

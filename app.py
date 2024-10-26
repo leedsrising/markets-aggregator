@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 import logging
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -11,6 +11,7 @@ from kalshiUtils import initialize_kalshi_client, fetch_kalshi_markets
 from polymarketUtils import initialize_polymarket_clob_client, fetch_polymarket_markets
 from polymarketUtils import fetch_polymarket_markets
 from utils import query_recent, upsert_markets, find_duplicate_markets
+from database import supabase
 
 from config import SOURCES, SOURCE_TABLES
 
@@ -63,12 +64,16 @@ def get_markets():
 @app.route('/api/deduplicate_markets', methods=['POST'])
 def deduplicate_markets():
     try:
-        markets = request.json.get('markets', [])
-        if not markets:
-            return jsonify({"error": "No markets provided"}), 400
-        
-        deduplicated_markets = find_duplicate_markets(markets)
-        
+        all_markets = []
+        for table_name in SOURCE_TABLES.values():
+            response = supabase.table(table_name).select('*').execute()
+            all_markets.extend(response.data)
+
+        if not all_markets:
+            return jsonify({"error": "No markets found in any source table"}), 400
+
+        deduplicated_markets = find_duplicate_markets(all_markets)
+
         return jsonify({"deduplicated_markets": deduplicated_markets})
     except Exception as e:
         logging.error(f'Error during deduplication: {e}', exc_info=True)
