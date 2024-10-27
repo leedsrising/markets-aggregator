@@ -9,4 +9,5 @@ supabase==1.0.3
 sentence-transformers==3.2.1
 algoliasearch>=2.0,<3.0
 APScheduler==3.10.1
-py-clob-client==0.1.0
+py-clob-client==0.18.0
+py-order-utils==0.3.2
